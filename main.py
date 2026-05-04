@@ -20,7 +20,11 @@ MODEL_ID = "gemini-2.5-flash"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-app = FastAPI(docs_url="/PB/docs", openapi_url="/PB/openapi.json")
+app = FastAPI(
+    docs_url="/PB/docs", 
+    openapi_url="/PB/openapi.json",
+    redoc_url="/PB/redoc"
+)
 
 # ================= 2. Schema 定义 =================
 NAL_V5_SCHEMA = {
