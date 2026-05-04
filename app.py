@@ -73,7 +73,7 @@ if uploaded_files:
             # Step A: 传输图像至 Supabase Storage
             for file in uploaded_files:
                 file_path = f"eval_queue/{int(time.time())}_{file.name}"
-               try:
+                try:
                 # 尝试上传
                     supabase.storage.from_("book_samples").upload(
                         file_path, file.getvalue(), {"upsert": True}
