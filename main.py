@@ -21,28 +21,33 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ... 保持之前的导入不变 ...
+app = FastAPI(docs_url="/PB/docs", openapi_url="/PB/openapi.json")
 
-app = FastAPI(
-    docs_url="/PB/docs", 
-    openapi_url="/PB/openapi.json"
-)
+# --- 核心修复：处理 Render 的所有健康检查 ---
+@app.get("/", tags=["Health"])
+@app.head("/", tags=["Health"]) # 显式支持 HEAD 方法
+async def root_check():
+    """让 Render 认为服务在线，并指引到文档路径"""
+    return {"status": "ok", "docs": "/PB/docs"}
 
-# 1. 修复根路径 404，让 Render 的健康检查通过
-@app.get("/")
-@app.get("/PB")
-async def health_check():
-    return {"status": "ok", "message": "NAL PB API is Live", "docs": "/PB/docs"}
+# --- 针对 /PB 路径的检查 ---
+@app.get("/PB", tags=["Health"])
+async def pb_check():
+    return {"status": "ok", "path": "/PB"}
 
-# 2. 确保 API 路由正确
+# --- 你的业务 API ---
 @app.post("/PB/api/evaluate")
 async def evaluate_endpoint(req: EvaluationRequest, background_tasks: BackgroundTasks):
-    # ... 你的逻辑代码 ...
+    # 确保这里的逻辑代码也有正确缩进
+    background_tasks.add_task(run_pb_review_workflow, req.id, req.award_type, req.image_urls)
     return {"status": "processing", "id": req.id}
 
-# 3. 增加一个不带 PB 前缀的备份路由（防止 Render 转发时去掉了前缀）
-@app.get("/health")
-async def backup_health():
-    return {"status": "ok"}
+# --- 状态查询 API ---
+@app.get("/PB/api/status/{row_id}")
+async def get_status(row_id: int):
+    # 这里也要注意缩进
+    res = supabase.table("nal_reviews").select("v65_visual_score, is_evaluated").eq("id", row_id).execute()
+    return res.data[0] if res.data else {"error": "not found"}
 
 # ================= 2. Schema 定义 =================
 NAL_V5_SCHEMA = {
