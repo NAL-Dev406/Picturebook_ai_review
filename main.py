@@ -22,42 +22,41 @@ genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = FastAPI(docs_url="/PB/docs", openapi_url="/PB/openapi.json")
 
-# --- 2. 延迟初始化逻辑 (防止 500 崩溃) ---
+# --- 2. 延迟/安全初始化 (核心修复) ---
+# 先定义为 None，防止启动时因为环境变量缺失直接炸掉
 supabase = None
 genai_client = None
 
 try:
     if SUPABASE_URL and SUPABASE_KEY:
-        # 确保 URL 是字符串且不为空
+        # 确保 URL 开头是 https://，Render 填错会导致此处崩溃
         supabase = create_client(str(SUPABASE_URL), str(SUPABASE_KEY))
     if GEMINI_API_KEY:
         genai_client = genai.Client(api_key=str(GEMINI_API_KEY))
 except Exception as e:
-    print(f"❌ 初始化客户端失败: {e}")
+    # 如果初始化失败，至少让日志打印出原因，而不是让整个服务 500
+    print(f"❌ 关键组件初始化失败: {e}")
 
-# --- 3. 根路径诊断 ---
+# --- 3. 诊断路径 (访问这个看变量是否读到了) ---
 @app.get("/")
-async def root():
-    # 诊断信息：帮助你检查哪些变量没读到
+async def diagnostic():
     return {
-        "status": "alive",
-        "config_check": {
-            "supabase_url_exists": bool(SUPABASE_URL),
-            "supabase_key_exists": bool(SUPABASE_KEY),
-            "gemini_key_exists": bool(GEMINI_API_KEY)
+        "status": "online",
+        "env_check": {
+            "supabase_ready": bool(supabase),
+            "gemini_ready": bool(genai_client)
         },
         "docs": "/PB/docs"
     }
 
-# --- 4. 修改业务接口增加安全检查 ---
+# --- 4. 修改业务接口，增加就绪检查 ---
 @app.post("/PB/api/evaluate")
 async def post_evaluate(req: EvaluationRequest, background_tasks: BackgroundTasks):
-    if not all([supabase, genai_client]):
-        raise HTTPException(status_code=500, detail="API 尚未就绪，请检查服务器环境变量配置。")
+    if not supabase or not genai_client:
+        raise HTTPException(status_code=503, detail="评审引擎未就绪，请检查服务器环境变量配置。")
     
     background_tasks.add_task(run_pb_review_workflow, req.id, req.award_type, req.image_urls)
-    return {"status": "started", "row_id": req.id}
-    
+    return {"status": "started", "row_id": req.id}    
 # ================= 2. Schema 定义 =================
 NAL_V5_SCHEMA = {
     'type': 'OBJECT',
