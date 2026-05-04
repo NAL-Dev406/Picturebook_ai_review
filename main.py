@@ -63,7 +63,7 @@ async def deep_evaluation_process(row_id: int, image_urls: List[str]):
         # 回填数据库
         supabase.table("nal_reviews").update({
             "v65_visual_score": score,
-            "synergy_report": result_text,
+            "v65_synergy_report": result_text,
             "status": "completed"
         }).eq("id", row_id).execute()
         
