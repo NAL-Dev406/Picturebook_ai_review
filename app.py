@@ -73,9 +73,17 @@ if uploaded_files:
             # Step A: 传输图像至 Supabase Storage
             for file in uploaded_files:
                 file_path = f"eval_queue/{int(time.time())}_{file.name}"
-                supabase.storage.from_("book_samples").upload(
-                    file_path, file.getvalue(), {"upsert": "True"}
-                )
+               try:
+                # 尝试上传
+                    supabase.storage.from_("book_samples").upload(
+                        file_path, file.getvalue(), {"upsert": True}
+                    )
+                except Exception as e:
+                    # 如果失败，直接在网页上显示具体原因
+                    st.error(f"❌ 上传失败。具体原因: {str(e)}")
+                    # 停止运行，防止后续报错
+                    st.stop()
+                
                 url = supabase.storage.from_("book_samples").get_public_url(file_path)
                 image_urls.append(url)
                 st.write(f"📥 暂存已完成: {file.name}")
