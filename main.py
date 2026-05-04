@@ -32,7 +32,7 @@ async def run_v65_review(row_id: int, image_urls: List[str]):
         print(f"🧠 [v65] 启动深度评审任务，ID: {row_id}")
         
         # 配置模型
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         # 构建学术 Prompt (基于 NAL 4:3:3 评估体系)
         prompt = """
