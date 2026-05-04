@@ -9,3 +9,5 @@ streamlit
 requests
 supabase
 pymupdf
+google-generativeai
+pydantic
