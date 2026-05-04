@@ -5,3 +5,7 @@ pillow
 google-genai
 supabase
 python-multipart
+streamlit
+requests
+supabase
+pymupdf
