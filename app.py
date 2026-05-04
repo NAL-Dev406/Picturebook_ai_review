@@ -73,10 +73,10 @@ if uploaded_files:
             # Step A: 传输图像至 Supabase Storage
             for file in uploaded_files:
                 file_path = f"eval_queue/{int(time.time())}_{file.name}"
-                supabase.storage.from_("book-samples").upload(
-                    file_path, file.getvalue(), {"upsert": "true"}
+                supabase.storage.from_("book_samples").upload(
+                    file_path, file.getvalue(), {"upsert": "True"}
                 )
-                url = supabase.storage.from_("book-samples").get_public_url(file_path)
+                url = supabase.storage.from_("book_samples").get_public_url(file_path)
                 image_urls.append(url)
                 st.write(f"📥 暂存已完成: {file.name}")
             
