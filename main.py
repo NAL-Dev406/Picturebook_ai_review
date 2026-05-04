@@ -22,41 +22,29 @@ genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = FastAPI(docs_url="/PB/docs", openapi_url="/PB/openapi.json")
 
-# --- 2. 延迟/安全初始化 (核心修复) ---
-# 先定义为 None，防止启动时因为环境变量缺失直接炸掉
-supabase = None
-genai_client = None
+# ================= 1. 定义 Schema =================
+class EvaluationRequest(BaseModel):
+    id: int
+    award_type: str
+    image_urls: list[HttpUrl]
 
-try:
-    if SUPABASE_URL and SUPABASE_KEY:
-        # 确保 URL 开头是 https://，Render 填错会导致此处崩溃
-        supabase = create_client(str(SUPABASE_URL), str(SUPABASE_KEY))
-    if GEMINI_API_KEY:
-        genai_client = genai.Client(api_key=str(GEMINI_API_KEY))
-except Exception as e:
-    # 如果初始化失败，至少让日志打印出原因，而不是让整个服务 500
-    print(f"❌ 关键组件初始化失败: {e}")
+# ✨ 关键修复：显式告知 Pydantic 重建模型架构，解决 500 报错
+EvaluationRequest.model_rebuild()
 
-# --- 3. 诊断路径 (访问这个看变量是否读到了) ---
+# ================= 2. 根路径与健康检查 =================
 @app.get("/")
-async def diagnostic():
-    return {
-        "status": "online",
-        "env_check": {
-            "supabase_ready": bool(supabase),
-            "gemini_ready": bool(genai_client)
-        },
-        "docs": "/PB/docs"
-    }
+@app.head("/") # 同时支持 GET 和 HEAD 方法，消除 405 报错
+async def root_health():
+    """让 Render 的监控知道我们活着"""
+    return {"status": "alive", "docs": "/PB/docs"}
 
-# --- 4. 修改业务接口，增加就绪检查 ---
+# ================= 3. 业务 API =================
 @app.post("/PB/api/evaluate")
 async def post_evaluate(req: EvaluationRequest, background_tasks: BackgroundTasks):
-    if not supabase or not genai_client:
-        raise HTTPException(status_code=503, detail="评审引擎未就绪，请检查服务器环境变量配置。")
-    
+    # 确保此处调用的函数已在上方定义
     background_tasks.add_task(run_pb_review_workflow, req.id, req.award_type, req.image_urls)
-    return {"status": "started", "row_id": req.id}    
+    return {"status": "started", "row_id": req.id} 
+    
 # ================= 2. Schema 定义 =================
 NAL_V5_SCHEMA = {
     'type': 'OBJECT',
