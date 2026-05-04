@@ -133,8 +133,7 @@ async def run_pb_review_workflow(row_id: int, award_type: str, urls: list[HttpUr
             "v65_visual_score": float(v65_out.get('v65_visual_score', 0)),
             "v65_critique": v65_out.get('v65_critique', ""),
             "v65_prediction": v65_out.get('v65_prediction', ""),
-            "v65_synergy_report": v65_out.get('v65_synergy_report', ""),
-            "is_evaluated": True
+            "v65_synergy_report": v65_out.get('v65_synergy_report', "")
         }
         supabase.table("nal_reviews").update(update_payload).eq("id", row_id).execute()
 
@@ -151,7 +150,7 @@ async def post_evaluate(req: EvaluationRequest, background_tasks: BackgroundTask
 @app.get("/PB/api/status/{row_id}")
 async def get_status(row_id: int):
     """供前端轮询评审状态"""
-    res = supabase.table("nal_reviews").select("v65_visual_score, is_evaluated").eq("id", row_id).execute()
+    res = supabase.table("nal_reviews").select("v65_visual_score").eq("id", row_id).execute()
     return res.data[0] if res.data else {"error": "not found"}
 
 @app.get("/PB/health")
