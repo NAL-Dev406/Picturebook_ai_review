@@ -20,23 +20,29 @@ MODEL_ID = "gemini-2.5-flash"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 修改 FastAPI 初始化，确保 docs 和 openapi 路径一致
+# ... 保持之前的导入不变 ...
+
 app = FastAPI(
     docs_url="/PB/docs", 
     openapi_url="/PB/openapi.json"
 )
 
-# --- 新增：处理根路径，解决 Render 日志中的 404 ---
+# 1. 修复根路径 404，让 Render 的健康检查通过
 @app.get("/")
-async def root_health():
-    """
-    让 Render 的 HEAD / 和 GET / 检查通过
-    """
-    return {"message": "NAL PB API is running", "docs": "/PB/docs"}
+@app.get("/PB")
+async def health_check():
+    return {"status": "ok", "message": "NAL PB API is Live", "docs": "/PB/docs"}
 
-# --- 原有的路由保持不变 ---
+# 2. 确保 API 路由正确
 @app.post("/PB/api/evaluate")
-async def post_evaluate(req: EvaluationRequest, background_tasks: BackgroundTasks):
+async def evaluate_endpoint(req: EvaluationRequest, background_tasks: BackgroundTasks):
+    # ... 你的逻辑代码 ...
+    return {"status": "processing", "id": req.id}
+
+# 3. 增加一个不带 PB 前缀的备份路由（防止 Render 转发时去掉了前缀）
+@app.get("/health")
+async def backup_health():
+    return {"status": "ok"}
 
 # ================= 2. Schema 定义 =================
 NAL_V5_SCHEMA = {
