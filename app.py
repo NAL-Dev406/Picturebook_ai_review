@@ -59,34 +59,43 @@ uploaded_files = st.file_uploader(
     help="请上传高清晰度页面以保证视觉分析精度"
 )
 
-if uploaded_files:
-    # 简单的图片预览流
-    cols = st.columns(min(len(uploaded_files), 5))
-    for i, file in enumerate(uploaded_files):
-        with cols[i % 5]:
-            st.image(file, use_container_width=True)
-
-    if st.button("🏛️ 提交学术评审", use_container_width=True):
-        image_urls = []
-        
-        with st.status("正在建立云端连接并传输图像...", expanded=True) as status:
-            # Step A: 传输图像至 Supabase Storage
-            for file in uploaded_files:
-                file_path = f"eval_queue/{int(time.time())}_{file.name}"
-                try:
-                # 尝试上传
-                    supabase.storage.from_("book_samples").upload(
-                        file_path, file.getvalue(), {"upsert": True}
-                    )
-                except Exception as e:
-                    # 如果失败，直接在网页上显示具体原因
-                    st.error(f"❌ 上传失败。具体原因: {str(e)}")
-                    # 停止运行，防止后续报错
-                    st.stop()
-                
+if uploaded_files and st.button("🏛️ 提交学术评审"):
+    image_urls = []
+    total_files = len(uploaded_files)
+    
+    # 1. 创建进度条和占位符
+    progress_bar = st.progress(0)
+    status_text = st.empty() 
+    
+    with st.status("正在启动云端传输...", expanded=True) as status:
+        for i, file in enumerate(uploaded_files):
+            # 更新当前状态文字
+            current_count = i + 1
+            status_text.markdown(f"**正在传输第 {current_count}/{total_files} 张:** `{file.name}`")
+            
+            # 执行上传
+            file_path = f"eval_queue/{int(time.time())}_{file.name}"
+            try:
+                # 显式指定类型并处理上传
+                supabase.storage.from_("book_samples").upload(
+                    file_path, 
+                    file.getvalue(), 
+                    {"upsert": "true", "content-type": "image/jpeg"}
+                )
                 url = supabase.storage.from_("book_samples").get_public_url(file_path)
                 image_urls.append(url)
-                st.write(f"📥 暂存已完成: {file.name}")
+                
+                # 2. 更新进度条高度
+                progress_bar.progress(current_count / total_files)
+                
+            except Exception as e:
+                st.error(f"传输第 {current_count} 张时失败: {e}")
+                continue # 某一张失败则跳过，继续下一张
+        
+        status_text.success(f"✅ 全案共 {total_files} 张图像已成功进入云端队列")
+        status.update(label="图像传输完毕，正在唤醒 Gemini 评审大脑...", state="running")
+
+    # 接下来的 API 调用逻辑...
             
             # Step B: 唤醒评审大脑
             payload = {
