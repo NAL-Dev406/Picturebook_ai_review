@@ -147,7 +147,7 @@ if uploaded_files:
                             st.markdown('<div class="report-card">', unsafe_allow_html=True)
                             st.markdown("#### 📖 深度综合评价 (Synergy Report)")
                             # 假设你的数据库列名为 synergy_report
-                            report_text = data.get('synergy_report', "报告已存入数据库，请查阅后台。")
+                            report_text = data.get('v65_synergy_report', "报告已存入数据库，请查阅后台。")
                             st.markdown(report_text)
                             st.markdown('</div>', unsafe_allow_html=True)
                             break
