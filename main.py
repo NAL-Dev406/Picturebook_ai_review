@@ -20,35 +20,44 @@ MODEL_ID = "gemini-2.5-flash"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ... 保持之前的导入不变 ...
 app = FastAPI(docs_url="/PB/docs", openapi_url="/PB/openapi.json")
 
-# --- 核心修复：处理 Render 的所有健康检查 ---
-@app.get("/", tags=["Health"])
-@app.head("/", tags=["Health"]) # 显式支持 HEAD 方法
-async def root_check():
-    """让 Render 认为服务在线，并指引到文档路径"""
-    return {"status": "ok", "docs": "/PB/docs"}
+# --- 2. 延迟初始化逻辑 (防止 500 崩溃) ---
+supabase = None
+genai_client = None
 
-# --- 针对 /PB 路径的检查 ---
-@app.get("/PB", tags=["Health"])
-async def pb_check():
-    return {"status": "ok", "path": "/PB"}
+try:
+    if SUPABASE_URL and SUPABASE_KEY:
+        # 确保 URL 是字符串且不为空
+        supabase = create_client(str(SUPABASE_URL), str(SUPABASE_KEY))
+    if GEMINI_API_KEY:
+        genai_client = genai.Client(api_key=str(GEMINI_API_KEY))
+except Exception as e:
+    print(f"❌ 初始化客户端失败: {e}")
 
-# --- 你的业务 API ---
+# --- 3. 根路径诊断 ---
+@app.get("/")
+async def root():
+    # 诊断信息：帮助你检查哪些变量没读到
+    return {
+        "status": "alive",
+        "config_check": {
+            "supabase_url_exists": bool(SUPABASE_URL),
+            "supabase_key_exists": bool(SUPABASE_KEY),
+            "gemini_key_exists": bool(GEMINI_API_KEY)
+        },
+        "docs": "/PB/docs"
+    }
+
+# --- 4. 修改业务接口增加安全检查 ---
 @app.post("/PB/api/evaluate")
-async def evaluate_endpoint(req: EvaluationRequest, background_tasks: BackgroundTasks):
-    # 确保这里的逻辑代码也有正确缩进
+async def post_evaluate(req: EvaluationRequest, background_tasks: BackgroundTasks):
+    if not all([supabase, genai_client]):
+        raise HTTPException(status_code=500, detail="API 尚未就绪，请检查服务器环境变量配置。")
+    
     background_tasks.add_task(run_pb_review_workflow, req.id, req.award_type, req.image_urls)
-    return {"status": "processing", "id": req.id}
-
-# --- 状态查询 API ---
-@app.get("/PB/api/status/{row_id}")
-async def get_status(row_id: int):
-    # 这里也要注意缩进
-    res = supabase.table("nal_reviews").select("v65_visual_score, is_evaluated").eq("id", row_id).execute()
-    return res.data[0] if res.data else {"error": "not found"}
-
+    return {"status": "started", "row_id": req.id}
+    
 # ================= 2. Schema 定义 =================
 NAL_V5_SCHEMA = {
     'type': 'OBJECT',
