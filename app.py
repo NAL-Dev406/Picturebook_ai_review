@@ -1,157 +1,119 @@
 import streamlit as st
 import requests
 import time
-import io
-import fitz  # PyMuPDF
-from supabase import create_client
 
-# --- 1. 页面配置与学术感样式 ---
-st.set_page_config(page_title="NAL | 绘本智能评审系统", layout="wide")
+# --- 1. 配置与初始化 ---
+st.set_page_config(page_title="NAL | 绘本 AI 深度评审系统", page_icon="🏛️", layout="wide")
 
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;500&display=swap');
-    html, body, [class*="css"] { font-family: 'Noto Serif SC', serif; }
-    .stTitle { font-weight: 500; color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-    .report-card { background-color: #fdfdfd; padding: 25px; border: 1px solid #e0e0e0; border-radius: 4px; line-height: 1.8; margin-top: 20px; }
-    .metric-box { text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-    </style>
-    """, unsafe_allow_html=True)
+# API 地址（请替换为您在 Render 上的实际后端域名）
+API_BASE_URL = "https://pb-api.nal-ai.org" 
 
-# --- 2. 初始化环境 (从 Secrets 读取) ---
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-    API_BASE_URL = "https://pb-api.nal-ai.org/PB/api"
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    st.error("配置缺失：请检查 Streamlit Secrets 中的 Supabase 凭证。")
-    st.stop()
+st.title("🏛️ NewArtLiterature Collective")
+st.subheader("绘本视觉叙事深度评审引擎 (v65)")
 
-# --- 3. 辅助函数：上传到存储桶 ---
-def upload_to_supabase(file_data, file_name):
-    """处理单张图像上传"""
-    file_path = f"eval_queue/{int(time.time())}_{file_name}"
-    try:
-        # 注意：upsert 使用小写字符串 "true" 以兼顾不同版本的 SDK 兼容性
-        supabase.storage.from_("book_samples").upload(
-            file_path, 
-            file_data, 
-            {"upsert": "true", "content-type": "image/jpeg"}
-        )
-        return supabase.storage.from_("book_samples").get_public_url(file_path)
-    except Exception as e:
-        st.error(f"传输失败 {file_name}: {str(e)}")
-        return None
-
-# --- 4. 侧边栏：评审准则 ---
+# --- 2. 侧边栏：评审配置 ---
 with st.sidebar:
-    st.markdown("### 🏛️ NAL 评审准则")
-    st.info("本系统采用 **4:3:3 权重模型**：\n- **视觉对撞 (40%)**\n- **创意维度 (30%)**\n- **文本叙事 (30%)**")
+    st.header("评审设置")
+    award_type = st.selectbox("参评奖项", ["陈伯吹新儿童文学奖", "NAL 艺术绘本奖", "年度最佳图文平衡奖"])
     st.divider()
-    st.caption("NewArtLiterature Collective | 2026")
+    st.info("当前算法：v65 4:3:3 深度评估模型\n- 视觉对撞 (40%)\n- 创意维度 (30%)\n- 叙事平衡 (30%)")
 
-# --- 5. 主界面布局 ---
-st.title("NewArtLiterature 绘本自动化评审平台")
-st.markdown("请上传绘本页面，系统将自动进行图像分析与叙事评估。")
+# --- 3. 核心功能区：文件上传 ---
+st.write("### 🖼️ 上传绘本内页采样")
+uploaded_files = st.file_uploader("支持多图上传 (JPG/PNG)", accept_multiple_files=True)
 
-uploaded_files = st.file_uploader(
-    "支持 PDF 或 批量图片 (JPG/PNG)", 
-    type=["pdf", "jpg", "png", "jpeg"],
-    accept_multiple_files=True
-)
-
-if uploaded_files:
-    if st.button("🏛️ 提交学术评审", use_container_width=True):
-        image_urls = []
+if st.button("🚀 启动深度学术评审", type="primary"):
+    if not uploaded_files:
+        st.warning("请先上传需要评审的绘本图像。")
+    else:
+        # 模拟：此处通常需要先将图片传至 Supabase Storage 获取公网 URL
+        # 为演示完整链路，假设图片已处理并获得 URL 列表
+        # 实际开发中请结合您的存储逻辑
+        dummy_urls = ["https://example.com/sample_page_1.jpg"] # 替换为真实上传后的链接列表
         
-        # 使用 status 容器保持界面整洁
-        with st.status("正在启动云端传输与图像处理...", expanded=True) as status:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            # 处理所有上传文件
-            processed_count = 0
-            # 预计算总数（如果是 PDF 则需要展开计算）
-            total_task_units = len(uploaded_files) 
-
-            for file in uploaded_files:
-                # 情况 A: 处理 PDF
-                if file.name.lower().endswith(".pdf"):
-                    status_text.markdown(f"📄 正在拆解 PDF: `{file.name}`")
-                    doc = fitz.open(stream=file.read(), filetype="pdf")
-                    for page_num in range(len(doc)):
-                        page = doc.load_page(page_num)
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                        img_bytes = pix.tobytes("jpg")
-                        
-                        url = upload_to_supabase(img_bytes, f"{file.name}_p{page_num}.jpg")
-                        if url: image_urls.append(url)
-                    doc.close()
+        payload = {
+            "award_type": award_type,
+            "image_urls": dummy_urls
+        }
+        
+        try:
+            with st.spinner("正在向后端 API 发送任务..."):
+                resp = requests.post(f"{API_BASE_URL}/PB/api/evaluate", json=payload, timeout=10)
                 
-                # 情况 B: 处理普通图片
-                else:
-                    status_text.markdown(f"📸 正在传输图片: `{file.name}`")
-                    url = upload_to_supabase(file.getvalue(), file.name)
-                    if url: image_urls.append(url)
+            if resp.status_code == 200:
+                result = resp.json()
+                row_id = result.get("row_id")
                 
-                processed_count += 1
-                progress_bar.progress(processed_count / total_task_units)
-
-            status_text.success(f"✅ 图像传输完毕，共计 {len(image_urls)} 个采样点")
-            
-            # --- 6. 调用评审 API ---
-            status.update(label="正在唤醒远端 Gemini 评审大脑...", state="running")
-            payload = {
-                "id": int(time.time()),
-                "award_type": "绘本奖",
-                "image_urls": image_urls
-            }
-            
-            try:
-                resp = requests.post(f"{API_BASE_URL}/evaluate", json=payload, timeout=10)
-                if resp.status_code == 200:
-                    row_id = resp.json().get("row_id")
-                    
-                    # --- 7. 结果轮询 (Polling) ---
-                    status.update(label="模型深度分析中，预计需要 30-60 秒...", state="running")
-                    start_time = time.time()
-                    
-                    while time.time() - start_time < 120: # 2分钟超时限制
-                        time.sleep(5)
-                        res_status = requests.get(f"{API_BASE_URL}/status/{row_id}")
-                        data = res_status.json()
+                # --- 4. 实时轮询逻辑 ---
+                st.toast(f"✅ 任务已立项，数据库 ID: {row_id}", icon='🤖')
+                
+                status_container = st.empty()
+                progress_bar = st.progress(0)
+                
+                # 轮询提示词（增加学术仪式感）
+                quotes = [
+                    "正在通过 4:3:3 模型建立视觉权重坐标...",
+                    "正在分析图像中的色彩张力与视觉隐喻...",
+                    "正在进行图文协同 (Synergy) 深度扫描...",
+                    "正在撰写学术评审报告摘要..."
+                ]
+                
+                start_time = time.time()
+                timeout_limit = 120  # 设置 2 分钟超时
+                
+                while True:
+                    # 检查是否超时
+                    if time.time() - start_time > timeout_limit:
+                        st.error("⌛ 评审时间过长，请稍后在历史记录中查看。")
+                        break
                         
-                        # 检查数据库中是否已填入视觉分
-                        if data.get("v65_visual_score"):
-                            status.update(label="评审报告已生成", state="complete")
-                            st.balloons()
+                    # 获取最新状态
+                    status_resp = requests.get(f"{API_BASE_URL}/PB/api/status/{row_id}")
+                    if status_resp.status_code == 200:
+                        data = status_resp.json()
+                        current_status = data.get("status")
+                        
+                        if current_status == "completed":
+                            progress_bar.progress(100)
+                            status_container.success("🎯 评审报告生成完毕！")
                             
-                            # --- 8. 结果展示 ---
+                            # --- 5. 结果展示区 ---
                             st.divider()
-                            st.markdown("### 📊 评审结果摘要")
-                            c1, c2, c3 = st.columns(3)
-                            with c1:
-                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.metric("视觉评分 (40%)", f"{data['v65_visual_score']}/10")
-                                st.markdown('</div>', unsafe_allow_html=True)
-                            with c2:
-                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.metric("创意维度 (30%)", "--")
-                                st.markdown('</div>', unsafe_allow_html=True)
-                            with c3:
-                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.metric("叙事平衡 (30%)", "--")
-                                st.markdown('</div>', unsafe_allow_html=True)
-
-                            st.markdown('<div class="report-card">', unsafe_allow_html=True)
-                            st.markdown("#### 📖 深度综合评价 (Synergy Report)")
-                            # 假设你的数据库列名为 synergy_report
-                            report_text = data.get('v65_synergy_report', "报告已存入数据库，请查阅后台。")
-                            st.markdown(report_text)
-                            st.markdown('</div>', unsafe_allow_html=True)
+                            col1, col2 = st.columns([1, 2])
+                            
+                            with col1:
+                                visual_score = data.get("v65_visual_score", 0)
+                                st.metric("v65 视觉综合得分", f"{visual_score}/10")
+                                st.write("**评估维度：**")
+                                st.caption("- 视觉对撞 (40%)")
+                                st.caption("- 创意维度 (30%)")
+                                st.caption("- 叙事平衡 (30%)")
+                                
+                            with col2:
+                                st.markdown("### 🏛️ 学术评审报告 (Synergy Report)")
+                                report_text = data.get("v65_synergy_report", "暂无报告内容")
+                                st.info(report_text)
                             break
-                else:
-                    st.error(f"远端大脑响应异常: {resp.text}")
-            except Exception as e:
-                st.error(f"API 通信失败: {str(e)}")
+                            
+                        elif current_status == "failed":
+                            st.error("❌ 后端模型分析失败。")
+                            break
+                        else:
+                            # 动态更新进度条文字
+                            idx = int((time.time() - start_time) // 10) % len(quotes)
+                            status_container.info(f"⏳ {quotes[idx]}")
+                            # 进度条模拟（前 90%）
+                            progress_val = min(int((time.time() - start_time) / 60 * 100), 90)
+                            progress_bar.progress(progress_val)
+                    
+                    time.sleep(5) # 每 5 秒轮询一次
+                    
+            else:
+                st.error(f"📡 API 响应异常: {resp.status_code}")
+                
+        except Exception as e:
+            st.error(f"📡 无法连接到后端服务: {e}")
+
+# --- 6. 页脚 ---
+st.divider()
+st.caption("© 2026 NewArtLiterature Collective | 数字化学术评审平台")
