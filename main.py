@@ -118,8 +118,8 @@ async def run_nal_engine(row_id: int, payload: dict):
             except Exception as e:
                 print(f"⚠️ 分数解析警告: {e}")
 
-        # 5. 回填至 Supabase (nal_evaluations_v2)
-        supabase.table("nal_evaluations_v2").update({
+        # 5. 回填至 Supabase (nal_evaluations)
+        supabase.table("nal_evaluations").update({
             "v65_visual_score": score_val,
             "v65_synergy_report": result_text,
             "status": "completed"
@@ -130,7 +130,7 @@ async def run_nal_engine(row_id: int, payload: dict):
     except Exception as e:
         print(f"❌ [NAL Engine ERROR] 档案 {row_id} 崩溃: {str(e)}")
         # 失败状态回填
-        supabase.table("nal_evaluations_v2").update({
+        supabase.table("nal_evaluations").update({
             "status": "failed",
             "v65_synergy_report": f"引擎分析失败: {str(e)}"
         }).eq("id", row_id).execute()
@@ -147,7 +147,7 @@ async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
             "status": "processing"
         }
         
-        res = supabase.table("nal_evaluations_v2").insert(insert_data).execute()
+        res = supabase.table("nal_evaluations").insert(insert_data).execute()
         if not res.data:
             raise HTTPException(status_code=500, detail="数据库建立档案失败")
 
@@ -169,7 +169,7 @@ async def get_status(row_id: int):
     """
     前端心跳轮询接口
     """
-    res = supabase.table("nal_evaluations_v2").select("*").eq("id", row_id).execute()
+    res = supabase.table("nal_evaluations").select("*").eq("id", row_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="未找到该档案")
     return res.data[0]
