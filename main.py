@@ -33,20 +33,33 @@ async def fetch_images_as_pil(urls: List[str]) -> List[Image.Image]:
     异步下载 Supabase 图片并转换为 Gemini 可直接处理的 PIL 对象
     """
     pil_images = []
-    async with httpx.AsyncClient() as client:
+    
+    # 1. 增加伪装头：告诉 Supabase "我是一个正常的 Chrome 浏览器，不是爬虫"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    # 2. 启用 follow_redirects=True 以防存储节点发生路由重定向
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
         for url in urls:
             try:
-                resp = await client.get(url, timeout=15.0)
+                print(f"🔄 正在尝试下载: {url}")
+                resp = await client.get(url, timeout=20.0) # 稍微加长一点超时时间
+                
                 if resp.status_code == 200:
                     img = Image.open(BytesIO(resp.content))
                     # 转换为 RGB 以防 PNG 透明通道导致报错
                     if img.mode != 'RGB':
                         img = img.convert('RGB')
                     pil_images.append(img)
+                    print(f"✅ 下载成功并转为 PIL 格式")
                 else:
                     print(f"⚠️ 图片下载失败 (HTTP {resp.status_code}): {url}")
+                    # 打印出具体的报错内容，方便万一再出错时排查
+                    print(f"   错误详情: {resp.text[:200]}") 
             except Exception as e:
                 print(f"⚠️ 图片处理异常: {url} -> {str(e)}")
+                
     return pil_images
 
 # --- 4. NAL 核心学术引擎 (v5 文本 + v65 视觉) ---
