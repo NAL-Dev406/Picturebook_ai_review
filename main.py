@@ -29,36 +29,45 @@ class EvalRequest(BaseModel):
 
 # --- 3. 核心工具库 ---
 async def fetch_images_as_pil(urls: List[str]) -> List[Image.Image]:
-    """
-    异步下载 Supabase 图片并转换为 Gemini 可直接处理的 PIL 对象
-    """
     pil_images = []
-    
-    # 1. 增加伪装头：告诉 Supabase "我是一个正常的 Chrome 浏览器，不是爬虫"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    # 2. 启用 follow_redirects=True 以防存储节点发生路由重定向
     async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
         for url in urls:
             try:
                 print(f"🔄 正在尝试下载: {url}")
-                resp = await client.get(url, timeout=20.0) # 稍微加长一点超时时间
+                resp = await client.get(url, timeout=20.0)
                 
                 if resp.status_code == 200:
+                    # 使用内存流打开图片
                     img = Image.open(BytesIO(resp.content))
-                    # 转换为 RGB 以防 PNG 透明通道导致报错
+                    
+                    # --- 🚀 内存优化核心逻辑 ---
+                    # 1. 强制转为 RGB (减少透明通道带来的开销)
                     if img.mode != 'RGB':
                         img = img.convert('RGB')
+                    
+                    # 2. 动态调整尺寸 (缩减位图内存占用)
+                    # 设定最大长边为 1600px，这足够 Gemini 评审细节
+                    max_size = 1600
+                    if max(img.width, img.height) > max_size:
+                        scale = max_size / max(img.width, img.height)
+                        new_size = (int(img.width * scale), int(img.height * scale))
+                        # 使用 Resampling.LANCZOS 保持高质量缩放
+                        img = img.resize(new_size, Image.Resampling.LANCZOS)
+                        print(f"📏 图片已缩放至: {new_size}")
+
                     pil_images.append(img)
-                    print(f"✅ 下载成功并转为 PIL 格式")
+                    print(f"✅ 图片处理完毕 (已节省内存)")
+                    
+                    # 3. 显式清理下载数据，释放缓冲区
+                    del resp
                 else:
-                    print(f"⚠️ 图片下载失败 (HTTP {resp.status_code}): {url}")
-                    # 打印出具体的报错内容，方便万一再出错时排查
-                    print(f"   错误详情: {resp.text[:200]}") 
+                    print(f"⚠️ 下载失败: {url}")
             except Exception as e:
-                print(f"⚠️ 图片处理异常: {url} -> {str(e)}")
+                print(f"⚠️ 异常: {url} -> {str(e)}")
                 
     return pil_images
 
