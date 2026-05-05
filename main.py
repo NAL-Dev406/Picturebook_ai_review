@@ -19,60 +19,76 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
 
 # --- 2. 数据模型 ---
+# --- 修改 main.py 中的核心评审逻辑 ---
+
 class EvalRequest(BaseModel):
-    award_type: str
+    work_type: str # 'picture_book' 或 'illustration'
+    script_text: str = ""
     image_urls: List[str]
 
-# --- 3. 核心评审逻辑 (v65 4:3:3 权重模型) ---
-async def run_v65_review(row_id: int, image_urls: List[str]):
-    """
-    异步执行 Gemini 深度评审任务
-    """
+async def run_nal_engine(row_id: int, payload: dict):
     try:
-        print(f"🧠 [v65] 启动深度评审任务，ID: {row_id}")
+        print(f"🧠 启动 NAL 评审引擎，ID: {row_id}，模式: {payload['work_type']}")
         
-        # 配置模型
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # 1. 转换图片为对象 (假设你已经有了 httpx 下载逻辑)
+        processed_images = await download_images(payload['image_urls']) 
         
-        # 构建学术 Prompt (基于 NAL 4:3:3 评估体系)
-        prompt = """
-        请作为 NewArtLiterature (NAL) 专家评审，对提供的绘本图像进行深度学术评估。
-        评估标准（4:3:3 权重）：
-        1. 视觉对撞 (40%): 色彩张力、构图隐喻、图像叙事能效。
-        2. 创意维度 (30%): 视觉语言的独特性与艺术原创性。
-        3. 叙事平衡 (30%): 图文协同的节奏感与翻页带来的张力变化。
-        
-        请直接输出结果，格式要求如下：
-        评分: [数字0-10]
-        评价: [300字以内的专业学术评审报告]
-        """
-        
-        # 准备分析内容
-        # 注意：此处假设 image_urls 已是可访问的公网链接
-        contents = [prompt] + image_urls
-        
-        # 模拟深度思考过程（Gemini 正常耗时 30-60秒）
-        response = await asyncio.to_thread(model.generate_content, contents)
+        # 2. 根据作品形态，组装深度 Instruction
+        if payload['work_type'] == "picture_book":
+            # 【绘本模式：v5 + v65 协同】
+            prompt = f"""
+            你现在是 NAL (NewArtLiterature) 平台的首席结构派绘本研究员。
+            请对附件中的【图片】和以下【文字脚本】进行深度的图文协同（Synergy）分析。
+            
+            【文字脚本】：
+            {payload['script_text']}
+            
+            【评估准则（必须严格执行）】：
+            1. 拒绝“插画中心主义”：不要孤立地评价画得美不美。
+            2. v5 脚本缺口测试：文字是否留有呼吸感？画面是否仅仅在“图解”文字，还是创造了第二层文本（例如外化了角色的深层心理学特征）？
+            3. v65 视觉协同：评估翻页间的色彩情绪流变。
+            
+            请输出：
+            协同评分: [数字0-10]
+            评价: [300字以内的专业学术分析，重点阐述图文关系]
+            """
+        else:
+            # 【插画模式：纯 v65 视觉】
+            prompt = """
+            你现在是 NAL (NewArtLiterature) 平台的视觉艺术评论家。
+            请对附件中的插画作品进行纯粹的视觉叙事评估。
+            
+            【评估准则（必须严格执行）】：
+            1. 视觉张力：分析色彩饱和度与光影对比带来的情绪对撞。
+            2. 构图隐喻：画面中的空间切割、视角选择是否具有隐喻性？
+            3. 独立叙事性：作为单幅作品，它是否能在没有文字辅助的情况下，通过视觉元素完整传达一种情境或理念？
+            
+            请输出：
+            视觉评分: [数字0-10]
+            评价: [300字以内的专业学术分析，重点阐述构图与视觉张力]
+            """
+
+        # 3. 提交给 Gemini (1.5 Flash 或 Pro)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = await asyncio.to_thread(model.generate_content, [prompt] + processed_images)
         result_text = response.text
         
-        # 简单解析评分与报告
-        score_val = 8.0 # 默认分
+        # 4. 解析分数 (通用提取)
+        score_val = 8.0
         if "评分:" in result_text:
             try:
                 score_val = float(result_text.split("评分:")[1].split("\n")[0].strip())
             except: pass
 
-        # 4. 回填数据库 (nal_evaluations_v2)
+        # 5. 回填数据库 (nal_evaluations_v2 表)
         supabase.table("nal_evaluations_v2").update({
             "v65_visual_score": score_val,
             "v65_synergy_report": result_text,
             "status": "completed"
         }).eq("id", row_id).execute()
-        
-        print(f"✅ [SUCCESS] 任务 {row_id} 评审完成")
 
     except Exception as e:
-        print(f"❌ [v65 ERROR] 任务 {row_id} 失败: {str(e)}")
+        print(f"❌ 引擎崩溃: {e}")
         supabase.table("nal_evaluations_v2").update({"status": "failed"}).eq("id", row_id).execute()
 
 # --- 4. API 路由接口 ---
