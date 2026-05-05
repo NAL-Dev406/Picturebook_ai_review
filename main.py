@@ -1,5 +1,8 @@
 import os
 import asyncio
+import httpx
+from io import BytesIO
+from PIL import Image
 from typing import List
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
@@ -7,133 +10,174 @@ from supabase import create_client, Client
 import google.generativeai as genai
 
 # --- 1. 初始化与配置 ---
-app = FastAPI(title="NAL PictureBook AI Review API V2")
+app = FastAPI(title="NAL Vision & Synergy Engine", version="v2.1.0")
 
-# 环境变量获取（请确保在 Render 后台已配置）
+# 环境变量 (Render 后台配置)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-GEMINI_API_KEY = os.environ.get("PB_AI_GEMINI_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # 初始化客户端
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# --- 修改 main.py 中的核心评审逻辑 ---
-
+# --- 2. 数据通信模型 ---
 class EvalRequest(BaseModel):
-    work_type: str # 'picture_book' 或 'illustration'
-    script_text: str = ""
-    image_urls: List[str]
+    work_type: str        # 'picture_book' 或 'illustration'
+    script_text: str      # 文本脚本 或 创作意图
+    image_urls: List[str] # Supabase 存储桶中的公网链接
 
+# --- 3. 核心工具库 ---
+async def fetch_images_as_pil(urls: List[str]) -> List[Image.Image]:
+    """
+    异步下载 Supabase 图片并转换为 Gemini 可直接处理的 PIL 对象
+    """
+    pil_images = []
+    async with httpx.AsyncClient() as client:
+        for url in urls:
+            try:
+                resp = await client.get(url, timeout=15.0)
+                if resp.status_code == 200:
+                    img = Image.open(BytesIO(resp.content))
+                    # 转换为 RGB 以防 PNG 透明通道导致报错
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    pil_images.append(img)
+                else:
+                    print(f"⚠️ 图片下载失败 (HTTP {resp.status_code}): {url}")
+            except Exception as e:
+                print(f"⚠️ 图片处理异常: {url} -> {str(e)}")
+    return pil_images
+
+# --- 4. NAL 核心学术引擎 (v5 文本 + v65 视觉) ---
 async def run_nal_engine(row_id: int, payload: dict):
     try:
-        print(f"🧠 启动 NAL 评审引擎，ID: {row_id}，模式: {payload['work_type']}")
+        print(f"🧠 [NAL Engine] 唤醒引擎... 档案ID: {row_id} | 模式: {payload['work_type']}")
         
-        # 1. 转换图片为对象 (假设你已经有了 httpx 下载逻辑)
-        processed_images = await download_images(payload['image_urls']) 
+        # 1. 预处理视觉素材
+        images = await fetch_images_as_pil(payload['image_urls'])
+        if not images:
+            raise Exception("无法提取有效视觉素材，请检查存储策略。")
+
+        # 2. 组装深度学术 Instruction (Prompt Engineering)
+        script_text = payload.get("script_text", "无文本")
         
-        # 2. 根据作品形态，组装深度 Instruction
         if payload['work_type'] == "picture_book":
-            # 【绘本模式：v5 + v65 协同】
+            # 绘本模式：强化图文协同与跨页节奏
             prompt = f"""
             你现在是 NAL (NewArtLiterature) 平台的首席结构派绘本研究员。
-            请对附件中的【图片】和以下【文字脚本】进行深度的图文协同（Synergy）分析。
+            请对附件中的【跨页图像】和以下【文字脚本】进行深度的图文协同（Synergy）分析。
             
-            【文字脚本】：
-            {payload['script_text']}
+            【配套文字脚本/意图】：
+            "{script_text}"
             
-            【评估准则（必须严格执行）】：
-            1. 拒绝“插画中心主义”：不要孤立地评价画得美不美。
-            2. v5 脚本缺口测试：文字是否留有呼吸感？画面是否仅仅在“图解”文字，还是创造了第二层文本（例如外化了角色的深层心理学特征）？
-            3. v65 视觉协同：评估翻页间的色彩情绪流变。
+            【NAL 4:3:3 核心评估准则】：
+            1. 视觉对撞 (40%): 色彩张力与跨页构图。
+            2. 创意维度 (30%): 拒绝平庸图解，图像是否在脚本之外创造了第二层隐喻？
+            3. 叙事平衡 (30%): v5 脚本缺口测试——画面是否有效地填充了文字留下的呼吸空间与心理外化？
             
-            请输出：
-            协同评分: [数字0-10]
-            评价: [300字以内的专业学术分析，重点阐述图文关系]
+            【格式要求】请直接输出：
+            评分: [基于10分制的综合数字，例如 8.5]
+            评价: [300-400字的专业学术分析，严厉且中肯，重点阐述图文协同关系。]
             """
         else:
-            # 【插画模式：纯 v65 视觉】
-            prompt = """
+            # 插画模式：强化意图契合与视觉张力
+            prompt = f"""
             你现在是 NAL (NewArtLiterature) 平台的视觉艺术评论家。
-            请对附件中的插画作品进行纯粹的视觉叙事评估。
+            请对附件中的【插画原图】进行评估。
             
-            【评估准则（必须严格执行）】：
-            1. 视觉张力：分析色彩饱和度与光影对比带来的情绪对撞。
-            2. 构图隐喻：画面中的空间切割、视角选择是否具有隐喻性？
-            3. 独立叙事性：作为单幅作品，它是否能在没有文字辅助的情况下，通过视觉元素完整传达一种情境或理念？
+            【作者创作意图/背景】：
+            "{script_text}"
             
-            请输出：
-            视觉评分: [数字0-10]
-            评价: [300字以内的专业学术分析，重点阐述构图与视觉张力]
+            【NAL 4:3:3 核心评估准则】：
+            1. 视觉对撞 (40%): 色彩饱和度、光影调度与情绪对撞。
+            2. 创意维度 (30%): 空间切割与视觉语言的独特性。
+            3. 意图契合 (30%): 核心拷问——这幅画面是克制且精准地传递了上述创作意图，还是偏离了文本，陷入了“无意义的炫技”？
+            
+            【格式要求】请直接输出：
+            评分: [基于10分制的综合数字，例如 8.0]
+            评价: [300-400字的专业学术分析，重点阐述构图隐喻以及对创作意图的响应。]
             """
 
-        # 3. 提交给 Gemini (1.5 Flash)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = await asyncio.to_thread(model.generate_content, [prompt] + processed_images)
+        # 3. 提交给 Gemini 模型进行多模态计算
+        # 确保传入的是 Prompt (文本) + PIL Image (图像) 的混合列表
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        contents = [prompt] + images
+        
+        # 使用 to_thread 防止网络 IO 阻塞 FastAPI 主线程
+        response = await asyncio.to_thread(model.generate_content, contents)
         result_text = response.text
         
-        # 4. 解析分数 (通用提取)
-        score_val = 8.0
+        # 4. 解析结果
+        score_val = 7.5 # 保底默认分
         if "评分:" in result_text:
             try:
-                score_val = float(result_text.split("评分:")[1].split("\n")[0].strip())
-            except: pass
+                # 简单粗暴的切割提取数字
+                score_str = result_text.split("评分:")[1].split("\n")[0].replace("分", "").strip()
+                score_val = float(score_str)
+            except Exception as e:
+                print(f"⚠️ 分数解析警告: {e}")
 
-        # 5. 回填数据库 (nal_evaluations_v2 表)
+        # 5. 回填至 Supabase (nal_evaluations_v2)
         supabase.table("nal_evaluations_v2").update({
             "v65_visual_score": score_val,
             "v65_synergy_report": result_text,
             "status": "completed"
         }).eq("id", row_id).execute()
+        
+        print(f"🎯 [NAL Engine] 档案 {row_id} 评审结案。")
 
     except Exception as e:
-        print(f"❌ 引擎崩溃: {e}")
-        supabase.table("nal_evaluations_v2").update({"status": "failed"}).eq("id", row_id).execute()
-# --- 4. API 路由接口 ---
+        print(f"❌ [NAL Engine ERROR] 档案 {row_id} 崩溃: {str(e)}")
+        # 失败状态回填
+        supabase.table("nal_evaluations_v2").update({
+            "status": "failed",
+            "v65_synergy_report": f"引擎分析失败: {str(e)}"
+        }).eq("id", row_id).execute()
+
+# --- 5. API 路由接口 ---
 
 @app.post("/PB/api/evaluate")
 async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
-    """
-    接收请求：创建记录 -> 返回真 ID -> 开启异步评审
-    """
     try:
-        # 1. 准备入库数据 (不包含 ID，由 Supabase 自动生成)
+        # 1. 初始化数据库记录 (获取自增 bigint ID)
         insert_data = {
-            "award_type": request.work_type,
+            "award_type": "picture_book" if request.work_type == "picture_book" else "illustration",
             "image_urls": request.image_urls,
             "status": "processing"
         }
-
-        # 2. 执行插入并获取返回的数字 ID
-        res = supabase.table("nal_evaluations_v2").insert(insert_data).execute()
         
+        res = supabase.table("nal_evaluations_v2").insert(insert_data).execute()
         if not res.data:
-            raise HTTPException(status_code=500, detail="数据库写入失败")
+            raise HTTPException(status_code=500, detail="数据库建立档案失败")
 
-        # 获取自增生成的 bigint ID
         db_id = res.data[0]['id']
-        print(f"📡 [API] 成功创建任务，获取数据库 ID: {db_id}")
+        
+        # 2. 压入后台处理队列
+        payload_dict = request.dict()
+        background_tasks.add_task(run_nal_engine, db_id, payload_dict)
 
-        # 3. 启动后台异步任务
-        background_tasks.add_task(run_nal_engine, db_id, request.model_dump())
-
-        # 4. 立即返回 ID 给前端，前端开始轮询
-        return {"row_id": db_id}
+        # 3. 即时返回通行凭证给前端
+        return {"row_id": db_id, "message": "学术分析已立项"}
 
     except Exception as e:
-        print(f"❌ [CRITICAL] 接口崩溃: {e}")
+        print(f"❌ [API] /evaluate 路由错误: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/PB/api/status/{row_id}")
 async def get_status(row_id: int):
     """
-    前端轮询进度接口
+    前端心跳轮询接口
     """
     res = supabase.table("nal_evaluations_v2").select("*").eq("id", row_id).execute()
     if not res.data:
-        raise HTTPException(status_code=404, detail="记录不存在")
+        raise HTTPException(status_code=404, detail="未找到该档案")
     return res.data[0]
 
 @app.get("/")
 def health_check():
-    return {"status": "online", "version": "v2.0.0-v65"}
+    return {
+        "status": "online", 
+        "architecture": "NAL Dual Engine (v5+v65)", 
+        "location": "Richmond Hill Data Node"
+    }
