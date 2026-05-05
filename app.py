@@ -41,7 +41,7 @@ def upload_images_to_nal_storage(files):
 
 # --- 3. 侧边栏：学术参数配置 ---
 st.title("🏛️ NewArtLiterature Collective")
-st.subheader("绘本与插画视觉叙事协同评审 (v65 + 意图解析)")
+st.subheader("绘本与插画视觉叙事协同评审")
 
 with st.sidebar:
     st.header("评审参数配置")
