@@ -99,7 +99,7 @@ async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
     try:
         # 1. 准备入库数据 (不包含 ID，由 Supabase 自动生成)
         insert_data = {
-            "award_type": request.award_type,
+            "award_type": request.work_type,
             "image_urls": request.image_urls,
             "status": "processing"
         }
