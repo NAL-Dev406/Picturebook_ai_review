@@ -15,7 +15,7 @@ app = FastAPI(title="NAL Vision & Synergy Engine", version="v2.1.0")
 # 环境变量 (Render 后台配置)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("PB_AI_GEMINI_KEY")
 
 # 初始化客户端
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
