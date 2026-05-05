@@ -101,7 +101,7 @@ async def run_nal_engine(row_id: int, payload: dict):
 
         # 3. 提交给 Gemini 模型进行多模态计算
         # 确保传入的是 Prompt (文本) + PIL Image (图像) 的混合列表
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         contents = [prompt] + images
         
         # 使用 to_thread 防止网络 IO 阻塞 FastAPI 主线程
