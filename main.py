@@ -142,7 +142,7 @@ async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
     try:
         # 1. 初始化数据库记录 (获取自增 bigint ID)
         insert_data = {
-            "award_type": "picture_book" if request.work_type == "picture_book" else "illustration",
+            "work_type": "picture_book" if request.work_type == "picture_book" else "illustration",
             "image_urls": request.image_urls,
             "status": "processing"
         }
