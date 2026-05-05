@@ -18,7 +18,6 @@ GEMINI_API_KEY = os.environ.get("PB_AI_GEMINI_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# --- 2. 数据模型 ---
 # --- 修改 main.py 中的核心评审逻辑 ---
 
 class EvalRequest(BaseModel):
@@ -68,8 +67,8 @@ async def run_nal_engine(row_id: int, payload: dict):
             评价: [300字以内的专业学术分析，重点阐述构图与视觉张力]
             """
 
-        # 3. 提交给 Gemini (2.5 Flash)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # 3. 提交给 Gemini (1.5 Flash 或 Pro)
+        model = genai.GenerativeModel('gemini-1.5-flash')
         response = await asyncio.to_thread(model.generate_content, [prompt] + processed_images)
         result_text = response.text
         
@@ -90,7 +89,6 @@ async def run_nal_engine(row_id: int, payload: dict):
     except Exception as e:
         print(f"❌ 引擎崩溃: {e}")
         supabase.table("nal_evaluations_v2").update({"status": "failed"}).eq("id", row_id).execute()
-
 # --- 4. API 路由接口 ---
 
 @app.post("/PB/api/evaluate")
