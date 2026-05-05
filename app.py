@@ -128,7 +128,7 @@ if st.button("🚀 提交 NAL 学术评审", type="primary"):
                 
                 while True:
                     # 获取数据库状态
-                    status_resp = requests.get(f"{API_BASE_URL}/PB/api/status/{row_id}")
+                    status_resp = requests.get(f"{API_BASE_URL}/PB/api/status/{row_id}", timeout=10)
                     if status_resp.status_code == 200:
                         data = status_resp.json()
                         status = data.get("status")
