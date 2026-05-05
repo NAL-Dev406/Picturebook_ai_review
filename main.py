@@ -115,7 +115,7 @@ async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
         print(f"📡 [API] 成功创建任务，获取数据库 ID: {db_id}")
 
         # 3. 启动后台异步任务
-        background_tasks.add_task(run_v65_review, db_id, request.image_urls)
+        background_tasks.add_task(run_nal_engine, db_id, request.image_urls)
 
         # 4. 立即返回 ID 给前端，前端开始轮询
         return {"row_id": db_id}
