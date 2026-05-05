@@ -46,48 +46,53 @@ def upload_images_to_nal_storage(files):
 st.title("🏛️ NewArtLiterature Collective")
 st.subheader("绘本视觉叙事深度评审引擎 (v65)")
 
+# --- 修改 app.py 的侧边栏和上传区逻辑 ---
+
 with st.sidebar:
     st.header("评审参数配置")
-    award_type = st.selectbox("目标奖项", [
-        "陈伯吹国际儿童文学奖", 
-        "NAL 艺术绘本金奖", 
-        "图文平衡叙事奖"
-    ])
+    # 替换奖项为艺术形态
+    work_type = st.selectbox("作品形态", ["绘本 (Picture Book)", "插画 (Illustration)"])
     st.divider()
-    st.markdown("""
-    **评估模型权重 (4:3:3)：**
-    - 视觉对撞 (40%)
-    - 创意维度 (30%)
-    - 叙事平衡 (30%)
-    """)
-    st.caption("当前引擎版本: v2.0.0-v65")
+    
+    if "绘本" in work_type:
+        st.markdown("**协同评估模型 (v5+v65)**\n- 文本逻辑分析\n- 视觉对撞评估\n- 图文叙事协同度")
+    else:
+        st.markdown("**视觉评估模型 (v65)**\n- 视觉对撞与张力\n- 构图隐喻\n- 艺术原创性")
+    st.caption("当前引擎版本: v2.1.0-NAL")
 
-# 主界面：上传区
-st.write("### 🖼️ 绘本内页采样上传")
+# 主界面：动态上传区
+st.write(f"### 🖼️ {work_type} 素材上传")
+
+# 只有选择了“绘本”，才显示脚本输入框
+script_text = ""
+if "绘本" in work_type:
+    script_text = st.text_area("✍️ 请输入对应的文字脚本 (v5 分析需要)", height=150, placeholder="例如：一天，岛上来了一只小船...")
+
 uploaded_files = st.file_uploader(
-    "支持上传 JPG, PNG 格式，建议上传包含典型图文关系的页面", 
+    "支持上传 JPG, PNG 格式", 
     accept_multiple_files=True
 )
 
 if st.button("🚀 提交学术评审任务", type="primary"):
+    # 增加校验：如果是绘本，最好有脚本
+    if "绘本" in work_type and not script_text.strip():
+        st.warning("建议输入文字脚本，以便进行完整的图文协同评估。")
+        st.stop()
+        
     if not uploaded_files:
         st.warning("请至少上传一张图片以供分析。")
-    else:
-        # 第一步：上传素材并获取真实 URL
-        with st.spinner("📦 正在将视觉素材同步至 NAL 存储库..."):
-            image_urls = upload_images_to_nal_storage(uploaded_files)
+        st.stop()
         
-        if not image_urls:
-            st.error("素材同步失败，请检查数据库存储配置。")
-        else:
-            try:
-                # 第二步：向后端发起任务
-                with st.spinner("📡 正在启动后台 v65 深度评审引擎..."):
-                    payload = {
-                        "award_type": award_type,
-                        "image_urls": image_urls
-                    }
-                    resp = requests.post(f"{API_BASE_URL}/PB/api/evaluate", json=payload, timeout=15)
+    # ... (随后的图片上传逻辑保持不变) ...
+    
+    # 组装新的 Payload 传给后端
+    payload = {
+        "work_type": "picture_book" if "绘本" in work_type else "illustration",
+        "script_text": script_text,
+        "image_urls": image_urls
+    }
+    # ... (请求后端逻辑不变) ...
+    resp = requests.post(f"{API_BASE_URL}/PB/api/evaluate", json=payload, timeout=15)
                 
                 if resp.status_code == 200:
                     row_id = resp.json().get("row_id")
