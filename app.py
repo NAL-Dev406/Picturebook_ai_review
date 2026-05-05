@@ -129,26 +129,26 @@ if st.button("🚀 提交学术评审任务", type="primary"):
                         score = data.get("v65_visual_score", 0)
                         st.metric("v65 综合评分", f"{score} / 10")
                         st.write("**权重分布：**")
-                                    st.caption(f"视觉: 4.0 | 创意: 3.0 | 叙事: 3.0")
+                        st.caption(f"视觉: 4.0 | 创意: 3.0 | 叙事: 3.0")
                                     
-                                with col_report:
-                                    st.markdown("### 🏛️ 学术评审报告 (Synergy Report)")
-                                    st.info(data.get("v65_synergy_report", "未提取到报告文本内容"))
-                                break
+                    with col_report:
+                        st.markdown("### 🏛️ 学术评审报告 (Synergy Report)")
+                        st.info(data.get("v65_synergy_report", "未提取到报告文本内容"))
+                        break
                                 
-                            elif status == "failed":
-                                st.error("❌ 评审任务处理失败，请检查后端日志。")
-                                break
-                            else:
-                                # 动态更新 UI
-                                elapsed = int(time.time() - start_time)
-                                q_idx = (elapsed // 10) % len(quotes)
-                                status_area.info(f"⏳ {quotes[q_idx]} (已耗时 {elapsed}s)")
-                                progress_bar.progress(min(elapsed * 2, 95)) # 模拟进度到 95%
-                                
-                        time.sleep(5) # 每 5 秒轮询一次
+                elif status == "failed":
+                    st.error("❌ 评审任务处理失败，请检查后端日志。")
+                    break
                 else:
-                    st.error(f"后端 API 拒绝了请求 (状态码: {resp.status_code})")
+                    # 动态更新 UI
+                    elapsed = int(time.time() - start_time)
+                    q_idx = (elapsed // 10) % len(quotes)
+                    status_area.info(f"⏳ {quotes[q_idx]} (已耗时 {elapsed}s)")
+                    progress_bar.progress(min(elapsed * 2, 95)) # 模拟进度到 95%
+                                
+                    time.sleep(5) # 每 5 秒轮询一次
+            else:
+                st.error(f"后端 API 拒绝了请求 (状态码: {resp.status_code})")
             except Exception as e:
                 st.error(f"连接后端服务失败: {e}")
 
