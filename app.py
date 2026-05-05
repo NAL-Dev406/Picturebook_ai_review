@@ -47,111 +47,78 @@ st.title("🏛️ NewArtLiterature Collective")
 st.subheader("绘本视觉叙事深度评审引擎 (v65)")
 
 # --- 修改 app.py 的侧边栏和上传区逻辑 ---
+# --- 修改 main.py 中的核心评审逻辑 ---
 
-with st.sidebar:
-    st.header("评审参数配置")
-    # 替换奖项为艺术形态
-    work_type = st.selectbox("作品形态", ["绘本 (Picture Book)", "插画 (Illustration)"])
-    st.divider()
-    
-    if "绘本" in work_type:
-        st.markdown("**协同评估模型 (v5+v65)**\n- 文本逻辑分析\n- 视觉对撞评估\n- 图文叙事协同度")
-    else:
-        st.markdown("**视觉评估模型 (v65)**\n- 视觉对撞与张力\n- 构图隐喻\n- 艺术原创性")
-    st.caption("当前引擎版本: v2.1.0-NAL")
+class EvalRequest(BaseModel):
+    work_type: str # 'picture_book' 或 'illustration'
+    script_text: str = ""
+    image_urls: List[str]
 
-# 主界面：动态上传区
-st.write(f"### 🖼️ {work_type} 素材上传")
-
-# 只有选择了“绘本”，才显示脚本输入框
-script_text = ""
-if "绘本" in work_type:
-    script_text = st.text_area("✍️ 请输入对应的文字脚本 (v5 分析需要)", height=150, placeholder="例如：一天，岛上来了一只小船...")
-
-uploaded_files = st.file_uploader(
-    "支持上传 JPG, PNG 格式", 
-    accept_multiple_files=True
-)
-
-if st.button("🚀 提交学术评审任务", type="primary"):
-    # 增加校验：如果是绘本，最好有脚本
-    if "绘本" in work_type and not script_text.strip():
-        st.warning("建议输入文字脚本，以便进行完整的图文协同评估。")
-        st.stop()
+async def run_nal_engine(row_id: int, payload: dict):
+    try:
+        print(f"🧠 启动 NAL 评审引擎，ID: {row_id}，模式: {payload['work_type']}")
         
-    if not uploaded_files:
-        st.warning("请至少上传一张图片以供分析。")
-        st.stop()
+        # 1. 转换图片为对象 (假设你已经有了 httpx 下载逻辑)
+        processed_images = await download_images(payload['image_urls']) 
         
-    # ... (随后的图片上传逻辑保持不变) ...
-    
-    # 组装新的 Payload 传给后端
-    payload = {
-        "work_type": "picture_book" if "绘本" in work_type else "illustration",
-        "script_text": script_text,
-        "image_urls": image_urls
-    }
-    # ... (请求后端逻辑不变) ...
-    resp = requests.post(f"{API_BASE_URL}/PB/api/evaluate", json=payload, timeout=15)
-                
-    if resp.status_code == 200:
-        row_id = resp.json().get("row_id")
-        st.toast(f"✅ 任务立项成功！记录 ID: {row_id}", icon="🤖")
-                    
-        # 第三步：进入轮询监控状态
-        status_area = st.empty()
-        progress_bar = st.progress(0)
-        start_time = time.time()
-                    
-        quotes = [
-                   "正在解析色彩张力与构图对比...",
-                   "正在评估视觉隐喻的原创性...",
-                   "正在计算图文协同的叙事节奏...",
-                   "学术评审报告撰写中..."
-                  ]
-                    
-        while True:
-            # 获取任务状态
-            status_resp = requests.get(f"{API_BASE_URL}/PB/api/status/{row_id}")
-            if status_resp.status_code == 200:
-                data = status_resp.json()
-                status = data.get("status")
-                            
-                if status == "completed":
-                    progress_bar.progress(100)
-                    status_area.success("🎯 评审已完成！")
-                                
-                    # 展示评审结果
-                    st.divider()
-                    col_score, col_report = st.columns([1, 2])
-                                
-                    with col_score:
-                        score = data.get("v65_visual_score", 0)
-                        st.metric("v65 综合评分", f"{score} / 10")
-                        st.write("**权重分布：**")
-                        st.caption(f"视觉: 4.0 | 创意: 3.0 | 叙事: 3.0")
-                                    
-                    with col_report:
-                        st.markdown("### 🏛️ 学术评审报告 (Synergy Report)")
-                        st.info(data.get("v65_synergy_report", "未提取到报告文本内容"))
-                        break
-                                
-                elif status == "failed":
-                    st.error("❌ 评审任务处理失败，请检查后端日志。")
-                    break
-                else:
-                    # 动态更新 UI
-                    elapsed = int(time.time() - start_time)
-                    q_idx = (elapsed // 10) % len(quotes)
-                    status_area.info(f"⏳ {quotes[q_idx]} (已耗时 {elapsed}s)")
-                    progress_bar.progress(min(elapsed * 2, 95)) # 模拟进度到 95%
-                                
-                    time.sleep(5) # 每 5 秒轮询一次
-            else:
-                st.error(f"后端 API 拒绝了请求 (状态码: {resp.status_code})")
-        #except Exception as e:
-         #   st.error(f"连接后端服务失败: {e}")
+        # 2. 根据作品形态，组装深度 Instruction
+        if payload['work_type'] == "picture_book":
+            # 【绘本模式：v5 + v65 协同】
+            prompt = f"""
+            你现在是 NAL (NewArtLiterature) 平台的首席结构派绘本研究员。
+            请对附件中的【图片】和以下【文字脚本】进行深度的图文协同（Synergy）分析。
+            
+            【文字脚本】：
+            {payload['script_text']}
+            
+            【评估准则（必须严格执行）】：
+            1. 拒绝“插画中心主义”：不要孤立地评价画得美不美。
+            2. v5 脚本缺口测试：文字是否留有呼吸感？画面是否仅仅在“图解”文字，还是创造了第二层文本（例如外化了角色的深层心理学特征）？
+            3. v65 视觉协同：评估翻页间的色彩情绪流变。
+            
+            请输出：
+            协同评分: [数字0-10]
+            评价: [300字以内的专业学术分析，重点阐述图文关系]
+            """
+        else:
+            # 【插画模式：纯 v65 视觉】
+            prompt = """
+            你现在是 NAL (NewArtLiterature) 平台的视觉艺术评论家。
+            请对附件中的插画作品进行纯粹的视觉叙事评估。
+            
+            【评估准则（必须严格执行）】：
+            1. 视觉张力：分析色彩饱和度与光影对比带来的情绪对撞。
+            2. 构图隐喻：画面中的空间切割、视角选择是否具有隐喻性？
+            3. 独立叙事性：作为单幅作品，它是否能在没有文字辅助的情况下，通过视觉元素完整传达一种情境或理念？
+            
+            请输出：
+            视觉评分: [数字0-10]
+            评价: [300字以内的专业学术分析，重点阐述构图与视觉张力]
+            """
 
+        # 3. 提交给 Gemini (1.5 Flash 或 Pro)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = await asyncio.to_thread(model.generate_content, [prompt] + processed_images)
+        result_text = response.text
+        
+        # 4. 解析分数 (通用提取)
+        score_val = 8.0
+        if "评分:" in result_text:
+            try:
+                score_val = float(result_text.split("评分:")[1].split("\n")[0].strip())
+            except: pass
+
+        # 5. 回填数据库 (nal_evaluations_v2 表)
+        supabase.table("nal_evaluations_v2").update({
+            "v65_visual_score": score_val,
+            "v65_synergy_report": result_text,
+            "status": "completed"
+        }).eq("id", row_id).execute()
+
+    except Exception as e:
+        print(f"❌ 引擎崩溃: {e}")
+        supabase.table("nal_evaluations_v2").update({"status": "failed"}).eq("id", row_id).execute()
+        
 # --- 4. 底部版权信息 ---
 st.divider()
 st.caption("© 2026 NewArtLiterature Collective | 艺术文献与数字学术平台")
