@@ -94,41 +94,41 @@ if st.button("🚀 提交学术评审任务", type="primary"):
     # ... (请求后端逻辑不变) ...
     resp = requests.post(f"{API_BASE_URL}/PB/api/evaluate", json=payload, timeout=15)
                 
-                if resp.status_code == 200:
-                    row_id = resp.json().get("row_id")
-                    st.toast(f"✅ 任务立项成功！记录 ID: {row_id}", icon="🤖")
+    if resp.status_code == 200:
+        row_id = resp.json().get("row_id")
+        st.toast(f"✅ 任务立项成功！记录 ID: {row_id}", icon="🤖")
                     
-                    # 第三步：进入轮询监控状态
-                    status_area = st.empty()
-                    progress_bar = st.progress(0)
-                    start_time = time.time()
+        # 第三步：进入轮询监控状态
+        status_area = st.empty()
+        progress_bar = st.progress(0)
+        start_time = time.time()
                     
-                    quotes = [
-                        "正在解析色彩张力与构图对比...",
-                        "正在评估视觉隐喻的原创性...",
-                        "正在计算图文协同的叙事节奏...",
-                        "学术评审报告撰写中..."
-                    ]
+        quotes = [
+                   "正在解析色彩张力与构图对比...",
+                   "正在评估视觉隐喻的原创性...",
+                   "正在计算图文协同的叙事节奏...",
+                   "学术评审报告撰写中..."
+                  ]
                     
-                    while True:
-                        # 获取任务状态
-                        status_resp = requests.get(f"{API_BASE_URL}/PB/api/status/{row_id}")
-                        if status_resp.status_code == 200:
-                            data = status_resp.json()
-                            status = data.get("status")
+        while True:
+            # 获取任务状态
+            status_resp = requests.get(f"{API_BASE_URL}/PB/api/status/{row_id}")
+            if status_resp.status_code == 200:
+                data = status_resp.json()
+                status = data.get("status")
                             
-                            if status == "completed":
-                                progress_bar.progress(100)
-                                status_area.success("🎯 评审已完成！")
+                if status == "completed":
+                    progress_bar.progress(100)
+                    status_area.success("🎯 评审已完成！")
                                 
-                                # 展示评审结果
-                                st.divider()
-                                col_score, col_report = st.columns([1, 2])
+                    # 展示评审结果
+                    st.divider()
+                    col_score, col_report = st.columns([1, 2])
                                 
-                                with col_score:
-                                    score = data.get("v65_visual_score", 0)
-                                    st.metric("v65 综合评分", f"{score} / 10")
-                                    st.write("**权重分布：**")
+                    with col_score:
+                        score = data.get("v65_visual_score", 0)
+                        st.metric("v65 综合评分", f"{score} / 10")
+                        st.write("**权重分布：**")
                                     st.caption(f"视觉: 4.0 | 创意: 3.0 | 叙事: 3.0")
                                     
                                 with col_report:
