@@ -149,8 +149,8 @@ if st.button("🚀 提交学术评审任务", type="primary"):
                     time.sleep(5) # 每 5 秒轮询一次
             else:
                 st.error(f"后端 API 拒绝了请求 (状态码: {resp.status_code})")
-            except Exception as e:
-                st.error(f"连接后端服务失败: {e}")
+        except Exception as e:
+            st.error(f"连接后端服务失败: {e}")
 
 # --- 4. 底部版权信息 ---
 st.divider()
