@@ -118,7 +118,7 @@ async def run_nal_engine(row_id: int, payload: dict):
         contents = [prompt] + images
         
         # 使用 to_thread 防止网络 IO 阻塞 FastAPI 主线程
-        response = await asyncio.to_thread(model.generate_content, contents)
+        response = await model.generate_content_async(contents)
         result_text = response.text
         
         # 4. 解析结果
@@ -155,7 +155,8 @@ async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
     try:
         # 1. 初始化数据库记录 (获取自增 bigint ID)
         insert_data = {
-            "work_type": "picture_book" if request.work_type == "picture_book" else "illustration",
+            "work_type": request.work_type,
+            "script_text": request.script_text,  # 必须加上这行！保存创作意图！
             "image_urls": request.image_urls,
             "status": "processing"
         }
