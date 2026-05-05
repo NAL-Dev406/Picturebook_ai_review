@@ -68,8 +68,8 @@ async def run_nal_engine(row_id: int, payload: dict):
             评价: [300字以内的专业学术分析，重点阐述构图与视觉张力]
             """
 
-        # 3. 提交给 Gemini (1.5 Flash 或 Pro)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # 3. 提交给 Gemini (2.5 Flash)
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = await asyncio.to_thread(model.generate_content, [prompt] + processed_images)
         result_text = response.text
         
