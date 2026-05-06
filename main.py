@@ -124,10 +124,11 @@ async def run_nal_engine(task_id: str, payload: dict):
         contents = [prompt] + images
         
         # --- 优化点 2：锁定温度与强制 JSON 输出 ---
+        # --- 开启绝对冰冻：贪婪解码模式 ---
         generation_config = genai.types.GenerationConfig(
-            temperature=0.1,  # 📉 将温度降到极低 (0.1)，极大提高评审结果的稳定性
-            top_p=0.8,
-            response_mime_type="application/json", # 🚀 强制模型输出标准 JSON，避免正则解析失败
+            temperature=0.05,  # 📉 绝对零度：彻底抹杀创造性，只选数学概率最高的输出
+            top_p=0.1,        # 压制概率长尾
+            response_mime_type="application/json",
         )
         
         response = await model.generate_content_async(
