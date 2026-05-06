@@ -8,24 +8,9 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from supabase import create_client, Client
 import google.generativeai as genai
-from fastapi.middleware.cors import CORSMiddleware
-
 
 # --- 1. 初始化与配置 ---
 app = FastAPI(title="NAL Vision & Synergy Engine", version="v2.1.0")
-
-# --- middleware CORS  ---
-app.add_middleware(
-    CORSMiddleware,
-    # 允许你的新二级域名以及根域名
-    allow_origins=[
-        "https://pb.nal-ai.org",
-        "https://nal-ai.org"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],  # 这一行会允许 OPTIONS, POST, GET 等所有方法
-    allow_headers=["*"],  # 允许所有 Header，解决预检请求
-)
 
 # 环境变量 (Render 后台配置)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
