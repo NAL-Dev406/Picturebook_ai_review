@@ -79,74 +79,101 @@ async def fetch_images_as_pil(urls: List[str]) -> List[Image.Image]:
 # --- 5. NAL 核心学术引擎 (后台任务) ---
 import json # 别忘了在 main.py 顶部确认导入了 json
 
+import json
+
+# --- 4. NAL 核心学术引擎 (注入 V5/V65 纯正学术理论版) ---
 async def run_nal_engine(task_id: str, payload: dict):
     try:
-        print(f"🧠 [NAL Engine] 唤醒引擎... 虚拟ID: {task_id}")
+        print(f"🧠 [NAL Engine] 唤醒引擎... 虚拟ID: {task_id} | 模式: {payload['work_type']}")
         
+        # 1. 预处理视觉素材
         images = await fetch_images_as_pil(payload['image_urls'])
         if not images:
             raise Exception("无法提取有效视觉素材。")
 
         script_text = payload.get("script_text", "无文本")
         
-        # --- 优化点 1：重构 Prompt，加入强制对齐约束 ---
-        base_prompt = f"""
-        你现在是 NAL (NewArtLiterature) 平台的首席结构派视觉叙事研究员。
-        
-        【配套文本/创作意图】：
-        "{script_text}"
-        
-        【NAL 4:3:3 核心评估准则】：
-        1. 视觉对撞 (40%): 色彩张力、光影调度与构图隐喻。
-        2. 创意维度 (30%): 拒绝平庸图解，空间切割与视觉语言的独特性。
-        3. 意图契合与叙事平衡 (30%): 画面是否克制且精准地传递了创作意图？是否陷入了“无意义的炫技”？
-        """
+        # 2. 组装深度学术 Instruction (融合陈晖、葛承训、巴德理论)
+        if payload['work_type'] == "picture_book":
+            prompt = f"""
+            你现在是 NAL (NewArtLiterature) 平台的首席结构派绘本研究员。
+            请结合【陈晖《图文转化论》】、【葛承训《统合美学》】以及【巴德图画书理论】，对附件中的【跨页图像】和以下【文字脚本】进行深度的图文协同（Synergy）分析。
+            
+            【配套文字脚本/意图】：
+            "{script_text}"
+            
+            【NAL 4:3:3 核心学术评估体系】：
+            1. 画面艺术性 (40%)：
+               - 陈晖视角：评估线条生命力、色彩契合度、造型独创性及全书风格稳定性。
+               - 葛承训视角：评估画面中民族元素或艺术内核的现代活化能力。
+            2. 创意与视觉隐喻 (30%)：
+               - 评估画面意象的厚度。拒绝平庸图解，图像是否在脚本之外创造了第二层隐喻和多层解码空间？
+            3. 叙事效率与节奏 (30%)：
+               - 巴德视角：评估图文依存关系。画面是否有效填充了文字留下的“视觉代偿预留”？跨页翻页是否具备动力钩子与呼吸感？
+            """
+        else:
+            prompt = f"""
+            你现在是 NAL (NewArtLiterature) 平台的视觉艺术评论家。
+            请结合【葛承训《统合美学》】与现代视觉隐喻理论，对附件中的【插画原图】进行深度的解构与评估。
+            
+            【作者创作意图/背景】：
+            "{script_text}"
+            
+            【NAL 4:3:3 核心学术评估体系】：
+            1. 画面艺术性 (40%)：
+               - 评估色彩饱和度、光影调度、构图张力。其艺术内核是否具备现代审美的统合力？
+            2. 创意维度 (30%)：
+               - 空间切割与视觉语言的独特性。意象隐喻基底是否深厚？是否拒绝了平庸的图解式表达？
+            3. 意图契合 (30%)：
+               - 核心拷问——这幅画面是克制且精准地传递了上述创作意图，还是偏离了文本，陷入了“无意义的炫技”？
+            """
 
+        # 3. 强制对齐约束 (确保分数不乱飘)
         alignment_rules = """
         【⛔ 强制对齐与逻辑约束（最高优先级）】：
         请严格遵循“先出具诊断评语，再推导最终分数”的逻辑。你的【分数】必须与你的【评语语气】绝对一致：
-        - [9.0 - 10.0分]：评语必须是极度赞赏，认为其具有极高艺术价值与协同度，几乎无懈可击。
-        - [8.0 - 8.9分]：评语应以专业肯定为主，画面优秀，但可指出微小瑕疵或改进空间。
-        - [7.0 - 7.9分]：评语必须明确指出结构、色彩或图文协同上的明显缺陷，语气客观、克制甚至严厉。
-        - [7.0分以下]：评语必须以严肃批评为主，指出其完全背离意图或存在严重的技术/审美硬伤。
+        - [9.0 - 10.0分]：极高图文转化潜力的视觉杰作，无懈可击。
+        - [8.0 - 8.9分]：专业水准卓越，但可指出微小瑕疵（如过渡页张力不足）。
+        - [7.0 - 7.9分]：指出结构或图文协同上的明显缺陷，语气克制严厉。
+        - [7.0分以下]：完全背离意图或存在严重审美硬伤，严肃批评。
 
         【输出格式要求】：
-        必须严格返回合法的 JSON 格式，不可包含 Markdown 代码块标记（如 ```json），只需纯 JSON：
+        必须严格返回合法的 JSON 格式，不可包含 Markdown 代码块标记，只需纯 JSON：
         {
-            "synergy_report": "300-400字的专业学术分析，严格遵守上述语气约束...",
-            "score": 8.5
+            "v65_synergy_report": "集成以上学术视角的专业点评（300-400字），重点阐述图文协同、隐喻厚度...等",
+            "v65_visual_score": 8.5
         }
         """
         
-        prompt = base_prompt + alignment_rules
+        final_prompt = prompt + alignment_rules
 
+        # 4. 提交给 Gemini 模型进行多模态计算
         model = genai.GenerativeModel('gemini-2.5-flash')
-        contents = [prompt] + images
+        contents = [final_prompt] + images
         
-        # --- 优化点 2：锁定温度与强制 JSON 输出 ---
-        # --- 开启绝对冰冻：贪婪解码模式 ---
+        # 锁定冰点温度，保留微弱灵性
         generation_config = genai.types.GenerationConfig(
-            temperature=0.05,  # 📉 绝对零度：彻底抹杀创造性，只选数学概率最高的输出
-            top_p=0.1,        # 压制概率长尾
-            response_mime_type="application/json",
+            temperature=0.05, 
+            top_p=0.8,
+            response_mime_type="application/json"
         )
         
         response = await model.generate_content_async(
-            contents, 
+            contents,
             generation_config=generation_config
         )
         
-        # 解析返回的 JSON
+        # 5. 安全解析 JSON
         try:
             result_data = json.loads(response.text)
-            report_text = result_data.get("synergy_report", "报告生成异常。")
-            score_val = float(result_data.get("score", 7.5))
+            report_text = result_data.get("v65_synergy_report", "报告生成异常。")
+            score_val = float(result_data.get("v65_visual_score", 7.5))
         except json.JSONDecodeError:
-            # 极端情况下的 fallback
-            report_text = response.text
-            score_val = 7.5
+            print(f"⚠️ JSON解析失败，原始文本: {response.text}")
+            report_text = "系统解析引擎反馈异常，请检查输入或联系管理员。"
+            score_val = 7.0
 
-        # 写入内存，供前端轮询拉取
+        # 6. 写入内存字典 (TASK_STORE) 供前端轮询
         TASK_STORE[task_id].update({
             "status": "completed",
             "v65_visual_score": score_val,
@@ -162,14 +189,15 @@ async def run_nal_engine(task_id: str, payload: dict):
         })
 
     finally:
-        # 阅后即焚清理逻辑保持不变...
+        # 阅后即焚清理逻辑
         for url in payload.get('image_urls', []):
             try:
                 file_path = url.split(f"/{BUCKET_NAME}/")[-1]
                 supabase.storage.from_(BUCKET_NAME).remove([file_path])
-            except Exception:
-                pass
-
+                print(f"🗑️ [阅后即焚] 已销毁云端缓存: {file_path}")
+            except Exception as delete_err:
+                print(f"⚠️ [阅后即焚] 清理失败: {delete_err}")
+                
 # --- 6. API 路由接口 ---
 
 @app.post("/PB/api/evaluate")
