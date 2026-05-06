@@ -16,18 +16,17 @@ app = FastAPI(title="NAL Vision & Synergy Engine", version="v2.1.0")
 # --- CORS 核心配置代码 ---
 # 定义允许访问后端的来源列表
 origins = [
-    "https://nal-ai.org",     # 你的主站官网
-    "https://pb.nal-ai.org",  # 你的视觉评审前端入口
+    "https://nal-ai.org",
+    "https://pb.nal-ai.org",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,            # 允许指定的域名跨域请求
-    allow_credentials=True,           # 允许携带 Cookie 等凭证
-    allow_methods=["*"],              # 允许所有 HTTP 方法 (POST, GET, OPTIONS 等)
-    allow_headers=["*"],              # 允许所有请求头
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# -----------------------
 
 # 环境变量 (Render 后台配置)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
