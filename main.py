@@ -82,19 +82,19 @@ import json # 别忘了在 main.py 顶部确认导入了 json
 import json
 
 # --- 4. NAL 核心学术引擎 (注入 V5/V65 纯正学术理论版) ---
+import json
+
 async def run_nal_engine(task_id: str, payload: dict):
     try:
-        print(f"🧠 [NAL Engine] 唤醒引擎... 虚拟ID: {task_id} | 模式: {payload['work_type']}")
+        print(f"🧠 [NAL Engine] 唤醒引擎... 虚拟ID: {task_id}")
         
-        # 1. 预处理视觉素材
-        images = await fetch_images_as_pil(payload['image_urls'])
+        images = await fetch_images_as_pil(payload.get('image_urls', []))
         if not images:
             raise Exception("无法提取有效视觉素材。")
 
         script_text = payload.get("script_text", "无文本")
         
-        # 2. 组装深度学术 Instruction (融合陈晖、葛承训、巴德理论)
-        if payload['work_type'] == "picture_book":
+        if payload.get('work_type') == "picture_book":
             prompt = f"""
             你现在是 NAL (NewArtLiterature) 平台的首席结构派绘本研究员。
             请结合【陈晖《图文转化论》】、【葛承训《统合美学》】以及【巴德图画书理论】，对附件中的【跨页图像】和以下【文字脚本】进行深度的图文协同（Synergy）分析。
@@ -128,8 +128,7 @@ async def run_nal_engine(task_id: str, payload: dict):
                - 核心拷问——这幅画面是克制且精准地传递了上述创作意图，还是偏离了文本，陷入了“无意义的炫技”？
             """
 
-        # 3. 强制对齐约束 (确保分数不乱飘)
-         alignment_rules = """
+        alignment_rules = """
         【⛔ 强制对齐与逻辑约束（最高优先级）】：
         请严格遵循“先出具诊断评语，再推导最终分数”的逻辑。你的【分数】必须与你的【评语语气】绝对一致：
         - [9.0 - 10.0分]：极高图文转化潜力的视觉杰作，无懈可击。
@@ -147,11 +146,9 @@ async def run_nal_engine(task_id: str, payload: dict):
         
         final_prompt = prompt + alignment_rules
 
-        # 4. 提交给 Gemini 模型进行多模态计算
         model = genai.GenerativeModel('gemini-2.5-flash')
         contents = [final_prompt] + images
         
-        # 锁定冰点温度，保留微弱灵性
         generation_config = genai.types.GenerationConfig(
             temperature=0.05, 
             top_p=0.8,
@@ -163,7 +160,6 @@ async def run_nal_engine(task_id: str, payload: dict):
             generation_config=generation_config
         )
         
-        # 5. 安全解析 JSON
         try:
             result_data = json.loads(response.text)
             report_text = result_data.get("v65_synergy_report", "报告生成异常。")
@@ -173,7 +169,6 @@ async def run_nal_engine(task_id: str, payload: dict):
             report_text = "系统解析引擎反馈异常，请检查输入或联系管理员。"
             score_val = 7.0
 
-        # 6. 写入内存字典 (TASK_STORE) 供前端轮询
         TASK_STORE[task_id].update({
             "status": "completed",
             "v65_visual_score": score_val,
@@ -189,14 +184,14 @@ async def run_nal_engine(task_id: str, payload: dict):
         })
 
     finally:
-        # 阅后即焚清理逻辑
         for url in payload.get('image_urls', []):
             try:
+                # 阅后即焚
                 file_path = url.split(f"/{BUCKET_NAME}/")[-1]
                 supabase.storage.from_(BUCKET_NAME).remove([file_path])
                 print(f"🗑️ [阅后即焚] 已销毁云端缓存: {file_path}")
             except Exception as delete_err:
-                print(f"⚠️ [阅后即焚] 清理失败: {delete_err}")
+                pass
                 
 # --- 6. API 路由接口 ---
 
