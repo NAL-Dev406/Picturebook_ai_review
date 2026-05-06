@@ -76,12 +76,7 @@ async def fetch_images_as_pil(urls: List[str]) -> List[Image.Image]:
                 
     return pil_images
 
-# --- 5. NAL 核心学术引擎 (后台任务) ---
-import json # 别忘了在 main.py 顶部确认导入了 json
-
-import json
-
-# --- 4. NAL 核心学术引擎 (注入 V5/V65 纯正学术理论版) ---
+# --- 5. NAL 核心学术引擎 (注入 V5/V65 纯正学术理论版) ---
 import json
 
 async def run_nal_engine(task_id: str, payload: dict):
