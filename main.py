@@ -17,9 +17,14 @@ app = FastAPI(title="NAL Vision & Synergy Engine", version="v2.1.0")
 # --- middleware CORS  ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://nal-ai.org"], # 允许你的新域名访问
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # 允许你的新二级域名以及根域名
+    allow_origins=[
+        "https://pb.nal-ai.org",
+        "https://nal-ai.org"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],  # 这一行会允许 OPTIONS, POST, GET 等所有方法
+    allow_headers=["*"],  # 允许所有 Header，解决预检请求
 )
 
 # 环境变量 (Render 后台配置)
